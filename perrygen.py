@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import random
 import string
 import asyncio
@@ -7,19 +8,27 @@ import re
 
 intents = discord.Intents.default()
 intents.members = True
-intents.message_content = True  # Add this line to include message content intent
+intents.message_content = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='/', intents=intents)
 
-dns_servers = ['8.8.8.8', '1.1.1.1']
+# Role limits for generation commands
+role_limits = {
+    'Free': 10,
+    'Basic': 50,
+    'Super': 100,
+    'Extended Stock': 500,
+    'Owner': 10000
+}
 
+# Domain mapping for services
 domain_mapping = {
     'steam': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'netflix': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'crunchyroll': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'psn': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'xbox': 'gmail.com, yahoo.com, hotmail.com, aol.com',
-    'roblox': 'gmail.com, yahoo.com, hotmail.com, aol.com',
+'roblox': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'epic_games': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'amazon': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'ebay': 'gmail.com, yahoo.com, hotmail.com, aol.com',
@@ -52,6 +61,81 @@ domain_mapping = {
     'paypal': 'gmail.com, yahoo.com, hotmail.com, aol.com'
 }
 
+# Service stock
+service_stock = {
+    'steam': 9999999999,
+    'netflix': 9999999999,
+    'crunchyroll': 9999999999,
+    'psn': 9999999999,
+    'xbox': 9999999999,
+    'roblox': 9999999999,
+    'epic_games': 9999999999,
+    'amazon': 9999999999,
+    'ebay': 9999999999,
+    'telegram': 9999999999,
+    'tiktok': 9999999999,
+    'battle_net': 9999999999,
+    'google': 9999999999,
+    'spotify': 9999999999,
+    'twitch': 9999999999,
+    'kick': 9999999999,
+    'reddit': 9999999999,
+    'soundcloud': 9999999999,
+    'facebook': 9999999999,
+    'twitter': 9999999999,
+    'linkedin': 9999999999,
+    'pinterest': 9999999999,
+    'snapchat': 9999999999,
+    'whatsapp': 9999999999,
+    'vimeo': 9999999999,
+    'tumblr': 9999999999,
+    'flickr':9999999999,
+    'dribbble': 9999999999,
+    'behance': 9999999999,
+    'medium': 9999999999,
+    'quora': 9999999999,
+    'yelp': 9999999999,
+    'gmail': 9999999999,
+    'rottentomatoes': 9999999999,
+    'paypal': 9999999999
+}
+
+# Predefined valid service codes (for demonstration purposes)
+valid_service_codes = {
+    'psn': ['A1B2C3D4E5F6', 'G7H8I9J0K1L2'],
+    'xbox': ['A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5'],
+    'epic_games': ['A1B2C3D4E5F6G7H8']
+}
+
+# Predefined valid accounts (for demonstration purposes)
+valid_accounts = {
+    'steam': [{'email': 'test1@gmail.com', 'password': 'password123'}],
+    'netflix': [{'email': 'test2@yahoo.com', 'password': 'password456'}]
+}
+
+# Helper functions
+def generate_credit_card():
+    """Generate a random 16-digit credit card number starting with 3, 4, 5, or 6."""
+    first_digit = random.choice(['3', '4', '5', '6'])
+    remaining_digits = ''.join(random.choices(string.digits, k=15))
+    return first_digit + remaining_digits
+
+def generate_cvv():
+    """Generate a random 3-digit CVV."""
+    return ''.join(random.choices(string.digits, k=3))
+
+def generate_expiration_date():
+    """Generate a random expiration date in the format MM/YYYY."""
+    month = random.randint(1, 12)
+    year = random.randint(2023, 2030)
+    return f"{month:02d}/{year}"
+
+def get_user_limit(member: discord.Member):
+    for role_name, limit in role_limits.items():
+        if discord.utils.get(member.roles, name=role_name):
+            return limit
+    return 0  # Default to 0 if no role matches
+
 def generate_random_email(service=None, domain=None):
     if domain:
         if service in domain_mapping:
@@ -60,315 +144,237 @@ def generate_random_email(service=None, domain=None):
             domain = domain
     else:
         domain = random.choice(['gmail.com', 'yahoo.com', 'hotmail.com', 'aol.com'])
-    
     return f"{random.choice(string.ascii_lowercase)}{random.randint(1, 999)}@{domain}"
 
 def generate_random_password():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
-def generate_random_phone_number():
-    return f"+1{random.randint(1000000000, 9999999999)}"
+# Slash command to generate an account
+@bot.tree.command(name="generate_account", description="Generate an account for a specific service and domain.")
+@app_commands.describe(service="The service to generate an account for.", domain="The domain to use.")
+async def generate_account(interaction: discord.Interaction, service: str, domain: str):
+    user_limit = get_user_limit(interaction.user)
+    if user_limit == 0:
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
 
-def is_valid_email(email):
-    # Simple regex for validating an email
-    regex = r'^\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    return re.match(regex, email)
+    if service not in domain_mapping:
+        await interaction.response.send_message(f"Invalid service. Available services: {', '.join(domain_mapping.keys())}", ephemeral=True)
+        return
 
-async def create_account_task(service=None, domain=None):
+    if domain not in domain_mapping[service].split(', '):
+        await interaction.response.send_message(f"Invalid domain for {service}. Available domains: {domain_mapping[service]}", ephemeral=True)
+        return
+
     email = generate_random_email(service, domain)
     password = generate_random_password()
-    phone_number = generate_random_phone_number()
+    await interaction.response.send_message(f"Generated account:\nEmail: `{email}`\nPassword: `{password}`")
 
-    if not is_valid_email(email):
-        email = None
+# Slash command to generate credit cards
+@bot.tree.command(name="generate_credit_card", description="Generate random credit cards.")
+@app_commands.describe(amount="The number of credit cards to generate.")
+async def generate_credit_card_command(interaction: discord.Interaction, amount: int = 1):
+    user_limit = get_user_limit(interaction.user)
+    if user_limit == 0:
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
 
-    print(f"Creating account with email: {email}")
-    print(f"Password: {password}")
-    print(f"Phone number: {phone_number}")
+    if amount > user_limit:
+        await interaction.response.send_message(
+            f"You can only generate up to {user_limit} credit cards based on your role.",
+            ephemeral=True
+        )
+        return
 
-    await bot.wait_until_ready()
-    return email, password, phone_number
+    # Defer the response to allow more time for processing
+    await interaction.response.defer()
 
-async def create_channel_task(guild, name, category):
-    channel = await guild.create_text_channel(name, category=category)
-    print(f"Channel created: {channel.mention}")
-    return channel
+    # Generate the requested number of credit cards
+    cards = [
+        {
+            "number": generate_credit_card(),
+            "expiration_date": generate_expiration_date(),
+            "cvv": generate_cvv()
+        }
+        for _ in range(amount)
+    ]
 
-def generate_credit_card():
-    number = []
-    for _ in range(15):
-        number.append(random.randint(0, 9))
-    return ''.join(str(x) for x in number)
+    # Format the response
+    card_details = "\n".join(
+        f"**Card {i+1}:**\n"
+        f"**Number:** `{card['number']}`\n"
+        f"**Expiration Date:** `{card['expiration_date']}`\n"
+        f"**CVV:** `{card['cvv']}`"
+        for i, card in enumerate(cards)
+    )
 
-def generate_expiration_date():
-    month = random.randint(1, 12)
-    year = random.randint(2023, 2030)
-    return f"{month}/{year}"
+    # Send the response
+    if len(card_details) > 2000:  # Discord message limit is 2000 characters
+        await interaction.followup.send("The generated credit cards are too many to display in one message. Please try generating fewer cards.")
+    else:
+        await interaction.followup.send(f"Generated {amount} credit card(s):\n\n{card_details}")
 
-def generate_cvv():
-    return str(random.randint(100, 999))
+# Slash command to validate a credit card
+@bot.tree.command(name="validate_credit_card", description="Validate a credit card.")
+@app_commands.describe(number="The credit card number.", expiration_date="The expiration date (MM/YYYY).", cvv="The CVV.")
+async def validate_credit_card(interaction: discord.Interaction, number: str, expiration_date: str, cvv: str):
+    if not number.isdigit() or len(number) != 16:
+        await interaction.response.send_message("Invalid credit card number. It must be 16 digits.")
+        return
 
-def validate_credit_card(number):
-    sum = 0
-    reverse_digits = number[::-1]
-    for i, digit in enumerate(reverse_digits):
-        n = int(digit)
-        if i % 2 == 1:
-            n *= 2
-            if n > 9:
-                n -= 9
-        sum += n
-    return sum % 10 == 0
+    if not re.match(r"^(0[1-9]|1[0-2])\/\d{4}$", expiration_date):
+        await interaction.response.send_message("Invalid expiration date. Format must be MM/YYYY.")
+        return
 
-def validate_expiration_date(date):
-    try:
-        month, year = map(int, date.split('/'))
-        if month < 1 or month > 12:
-            return False
-        if year < 2023 or year > 2030:
-            return False
-        return True
-    except ValueError:
-        return False
+    if not cvv.isdigit() or len(cvv) != 3:
+        await interaction.response.send_message("Invalid CVV. It must be 3 digits.")
+        return
 
-def generate_service_code(service, length=None):
-    if service == 'psn':
-        return ''.join(random.choices(string.digits, k=12))
-    elif service == 'xbox':
-        return '-'.join(''.join(random.choices(string.ascii_uppercase + string.digits, k=5)) for _ in range(5))
-    elif service == 'fortnite':
-        if length == 12:
-            return ''.join(random.choices(string.digits, k=12))
-        elif length == 16:
-            return ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
-        elif length == 25:
-            return '-'.join(''.join(random.choices(string.ascii_uppercase + string.digits, k=5)) for _ in range(5))
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
+    await interaction.response.send_message("Credit card is valid!")
 
-def check_service_code(service, code):
-    # Simulated code checking logic
-    valid_codes = {
-        'psn': 'PSN1234567890ABCD',
-        'xbox': 'XBOX1234567890ABCD',
-        'fortnite': 'FORTNITE123456AB'
+# Generate the requested number of service codes
+    code_length = service_code_lengths[service]
+    codes = [
+        ''.join(random.choices(string.ascii_uppercase + string.digits, k=code_length))
+        for _ in range(amount)
+    ]
+    await interaction.response.send_message(
+        f"Generated {amount} code(s) for **{service.capitalize()}**:\n" + "\n".join(f"`{code}`" for code in codes)
+    )
+
+# Slash command to generate service codes
+@bot.tree.command(name="generate_service_code", description="Generate service codes for a specific service.")
+@app_commands.describe(service="The service to generate codes for.", amount="The number of codes to generate.")
+async def generate_service_code(interaction: discord.Interaction, service: str, amount: int = 1):
+    user_limit = get_user_limit(interaction.user)
+    if user_limit == 0:
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    # Define specific code lengths for services
+    service_code_lengths = {
+        'psn': 12,
+        'xbox': 25,
+        'epic_games': 16
     }
-    return code == valid_codes.get(service.lower(), '')
 
-def estimate_balance(card_number):
-    # Simulated balance estimation based on the first digit of the card number (MII)
-    mii = card_number[0]
-    balance_mapping = {
-        '1': random.uniform(1, 5000),
-        '2': random.uniform(1, 5000),
-        '3': random.uniform(1, 5000),
-        '4': random.uniform(1, 5000),
-        '5': random.uniform(1, 5000),
-        '6': random.uniform(1, 5000),
-        '7': random.uniform(1, 5000),
-        '8': random.uniform(1, 5000),
-        '9': random.uniform(1, 5000),
-        '0': random.uniform(1, 5000)
-    }
-    return round(balance_mapping.get(mii, 0.00), 2)
+    if service not in service_code_lengths:
+        await interaction.response.send_message(
+            f"Invalid service. Available services: {', '.join(service_code_lengths.keys())}",
+            ephemeral=True
+        )
+        return
 
+    if amount > user_limit:
+        await interaction.response.send_message(
+            f"You can only generate up to {user_limit} codes based on your role.",
+            ephemeral=True
+        )
+        return
+
+    # Generate the requested number of service codes
+    code_length = service_code_lengths[service]
+    codes = [
+        ''.join(random.choices(string.ascii_uppercase + string.digits, k=code_length))
+        for _ in range(amount)
+    ]
+    await interaction.response.send_message(
+        f"Generated {amount} code(s) for **{service.capitalize()}**:\n" + "\n".join(f"`{code}`" for code in codes)
+    )
+
+# Slash command to check a service code
+@bot.tree.command(name="check_service_code", description="Check if a service code is valid.")
+@app_commands.describe(service="The service to check the code for.", code="The service code to check.")
+async def check_service_code(interaction: discord.Interaction, service: str, code: str):
+    if service not in valid_service_codes:
+        await interaction.response.send_message(
+            f"Invalid service. Available services: {', '.join(valid_service_codes.keys())}",
+            ephemeral=True
+        )
+        return
+
+    if code in valid_service_codes[service]:
+        await interaction.response.send_message(f"The code `{code}` for **{service.capitalize()}** is valid!")
+    else:
+        await interaction.response.send_message(f"The code `{code}` for **{service.capitalize()}** is not valid.")
+
+# Slash command to check an account
+@bot.tree.command(name="check_account", description="Check if an account is valid.")
+@app_commands.describe(service="The service to check the account for.", email="The email of the account.", password="The password of the account.")
+async def check_account(interaction: discord.Interaction, service: str, email: str, password: str):
+    if service not in valid_accounts:
+        await interaction.response.send_message(
+            f"Invalid service. Available services: {', '.join(valid_accounts.keys())}",
+            ephemeral=True
+        )
+        return
+
+    # Check if the account exists in the valid accounts list
+    for account in valid_accounts[service]:
+        if account['email'] == email and account['password'] == password:
+            await interaction.response.send_message(f"The account `{email}` for **{service.capitalize()}** is valid!")
+            return
+
+    await interaction.response.send_message(f"The account `{email}` for **{service.capitalize()}** is not valid.")
+
+# Slash command to show all commands
+@bot.tree.command(name="show_commands", description="Show all available commands.")
+async def show_commands(interaction: discord.Interaction):
+    commands_list = [
+        "/generate_account - Generate an account for a specific service and domain.",
+        "/generate_credit_card - Generate a random credit card.",
+        "/validate_credit_card - Validate a credit card.",
+        "/generate_service_code - Generate a service code for a specific service.",
+        "/check_service_code - Check if a service code is valid.",
+        "/check_account - Check if an account is valid.",
+        "/setup_server - Set up the server with categories and channels for the bot.",
+        "/show_commands - Show all available commands.",
+        "/show_stock - Show the stock for all services."
+    ]
+    await interaction.response.send_message("Available commands:\n" + "\n".join(commands_list))
+
+# Slash command to show stock
+@bot.tree.command(name="show_stock", description="Show the stock for all available services.")
+async def show_stock(interaction: discord.Interaction):
+    if not service_stock:
+        await interaction.response.send_message("No services are currently available.", ephemeral=True)
+        return
+
+    stock_list = [f"**{service.capitalize()}**: {stock}" for service, stock in service_stock.items()]
+    await interaction.response.send_message("**Service Stock:**\n" + "\n".join(stock_list))
+
+# Slash command to set up the server
+@bot.tree.command(name="setup_server", description="Set up the server with categories and channels for the bot.")
+async def setup_server(interaction: discord.Interaction):
+    guild = interaction.guild
+    if not guild:
+        await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+        return
+
+    # Create categories and channels
+    categories = ['Free', 'Basic', 'Super']
+    for category_name in categories:
+        category = discord.utils.get(guild.categories, name=category_name)
+        if not category:
+            category = await guild.create_category(category_name)
+            # Create a text channel in the category
+        channel_name = f"{category_name.lower()}-channel"
+        if not discord.utils.get(category.channels, name=channel_name):
+            await guild.create_text_channel(channel_name, category=category)
+        
+    await interaction.response.send_message("Server setup complete!")
+        
+# Event to sync slash commands
 @bot.event
 async def on_ready():
-    print(f"{bot.user} has connected to Discord!")
-
-@bot.command(name='setup_server')
-@commands.is_owner()
-async def setup_server(ctx):
-    print("setup_server command called")
-    guild = ctx.guild
-
-    # Create roles
-    roles = ['Free', 'Basic', 'Super', 'Owner', 'Extended Stock', 'Mod', 'Admin', 'Support', 'Ticket Support', 'Head Support', 'Head Mod', 'Head Admin']
-    for role in roles:
-        print(f"Creating role: {role}")
-        await guild.create_role(name=role)
-    
-    # Create categories and channels
-    categories = {
-        'Welcome': ['welcome'],
-        'Tickets': ['tickets'],
-        'Main': ['rules', 'announcements', 'general-chat', 'mod-chat'],
-        'Legit': ['vouches', 'legit'],
-        'Generator': ['free', 'basic', 'super'],
-        'Free': ['giveaways', 'drops']
-    }
-
-    for category_name, channels in categories.items():
-        category = await guild.create_category(category_name)
-        for channel in channels:
-            await create_channel_task(guild, channel, category)
-    
-    await ctx.send("Server setup complete with roles and channels!")
-
-@bot.command(name='create_channel')
-async def create_channel_command(ctx, *, name):
     try:
-        channel = await create_channel_task(ctx.guild, name, None)
-        await ctx.send(f"Channel created: {channel.mention}")
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} commands.")
+        print(f"{bot.user} is connected to Discord!")
     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
+                print(f"Failed to sync commands: {e}")
 
-@bot.command(name='generate_account')
-async def generate_account_command(ctx, service: str, domain: str, count: int = 1):
-    role_limits = {
-        'Free': 10,
-        'Basic': 50,
-        'Super': 100,
-        'Extended Stock': 500,
-        'Owner': 10000
-    }
-
-    user_roles = [role.name for role in ctx.author.roles]
-    max_count = 0
-
-    for role, limit in role_limits.items():
-        if role in user_roles:
-            max_count = limit
-            break
-
-    if max_count == 0:
-        await ctx.send("You do not have permission to use this command.")
-        return
-
-    if count > max_count:
-        await ctx.send(f"You can only generate up to {max_count} accounts.")
-        return
-
-    if domain not in ['gmail.com', 'yahoo.com', 'hotmail.com', 'aol.com']:
-        await ctx.send("Invalid domain. Please choose from: gmail.com, yahoo.com, hotmail.com, aol.com.")
-        return
-
-    try:
-        accounts = []
-        for _ in range(count):
-            email, password, phone_number = await create_account_task(service, domain)
-            if email:
-                accounts.append(f"Email: {email}, Password: {password}")
-            else:
-                accounts.append(f"Phone number: {phone_number}, Password: {password}")
-        
-        tier = 'Super' if 'Super' in user_roles else 'Basic'
-        channel_name = ctx.channel.name
-        await ctx.send(f"Generated {tier} account(s) for {service} in the {channel_name} channel:\n" + "\n".join(accounts))
-    except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
-
-@bot.command(name='generate_credit_card')
-async def generate_credit_card_command(ctx):
-    try:
-        number = generate_credit_card()
-        expiration_date = generate_expiration_date()
-        cvv = generate_cvv()
-        balance = estimate_balance(number)
-        await ctx.send(f"**Credit Card Number:** `{number}`\n**Expiration Date:** `{expiration_date}`\n**CVV:** `{cvv}`\n**Estimated Balance:** `${balance}`")
-    except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
-
-@bot.command(name='validate_credit_card')
-async def validate_credit_card_command(ctx, number: str, expiration_date: str, cvv: str):
-    """Validates a credit card."""
-    try:
-        if validate_credit_card(number) and validate_expiration_date(expiration_date):
-            await ctx.send("Credit card is valid!")
-        else:
-            await ctx.send("Credit card is not valid.")
-    except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
-
-@bot.command(name='generate_service_code')
-async def generate_service_code_command(ctx, service: str, length: int = None):
-    """Generates a service code (Super role required)."""
-    if 'Super' in [role.name for role in ctx.author.roles]:
-        try:
-            code = generate_service_code(service, length)
-            await ctx.send(f"**Generated code for {service}:** `{code}`")
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-    else:
-        await ctx.send("You do not have permission to use this command.")
-
-@bot.command(name='check_service_code')
-async def check_service_code_command(ctx, service: str, code: str):
-    """Checks if a service code is valid (Super role required)."""
-    if 'Super' in [role.name for role in ctx.author.roles]:
-        try:
-            if check_service_code(service, code):
-                await ctx.send(f"The code for {service} is valid!")
-            else:
-                await ctx.send(f"The code for {service} is not valid.")
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-    else:
-        await ctx.send("You do not have permission to use this command.")
-
-@bot.command(name='cmds')
-async def cmds_command(ctx):
-    commands_list = """
-    **Commands:**
-    ```
-    !setup_server - Sets up the server with roles and channels.
-    !create_channel <name> - Creates a new text channel.
-    !generate_account <service> <domain> [count] - Generates account(s) for the specified service and domain (Free: 10, Basic: 50, Super: 100, Extended Stock: 500, Owner: 10000).
-    !generate_credit_card - Generates a random credit card.
-    !validate_credit_card <number> <expiration_date> <cvv> - Validates a credit card.
-    !generate_service_code <service> [length] - Generates a service code (Super role required).
-    !check_service_code <service> <code> - Checks if a service code is valid (Super role required).
-    !cmds - Shows this help message.
-    !stock - Shows the stock.
-    ```
-    """
-    await ctx.send(commands_list)
-
-@bot.command(name='stock')
-async def stock_command(ctx):
-    stock_list = """
-    **Available services:**
-    ```
-    - steam
-    - discord
-    - netflix
-    - crunchyroll
-    - psn
-    - xbox
-    - roblox
-    - epic_games
-    - amazon
-    - ebay
-    - telegram
-    - tiktok
-    - battle_net
-    - google
-    - spotify
-    - twitch
-    - kick
-    - reddit
-    - soundcloud
-    - facebook
-    - twitter
-    - linkedin
-    - pinterest
-    - snapchat
-    - whatsapp
-    - vimeo
-    - tumblr
-    - flickr
-    - dribbble
-    - behance
-    - medium
-    - quora
-    - yelp
-    - tripadvisor
-    - imdb
-    - rottentomatoes
-    - paypal
-    ```
-    """
-    await ctx.send(stock_list)
-
+# Run the bot
 bot.run('YOUR_BOT_TOKEN')
 
-# Replace 'YOUR_BOT_TOKEN' with your bot token.
+# Replace YOUR_BOT_TOKEN with your bot token
