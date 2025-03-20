@@ -28,7 +28,7 @@ domain_mapping = {
     'crunchyroll': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'psn': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'xbox': 'gmail.com, yahoo.com, hotmail.com, aol.com',
-'roblox': 'gmail.com, yahoo.com, hotmail.com, aol.com',
+    'roblox': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'epic_games': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'amazon': 'gmail.com, yahoo.com, hotmail.com, aol.com',
     'ebay': 'gmail.com, yahoo.com, hotmail.com, aol.com',
@@ -137,22 +137,37 @@ def get_user_limit(member: discord.Member):
     return 0  # Default to 0 if no role matches
 
 def generate_random_email(service=None, domain=None):
+    """Generate a random email address for the specified service and domain."""
     if domain:
-        if service in domain_mapping:
-            domain = random.choice(domain_mapping[service].split(', '))
+        # Ensure the domain is valid for the specified service
+        if service in domain_mapping and domain in domain_mapping[service].split(', '):
+            selected_domain = domain  # Use the user-specified domain
         else:
-            domain = domain
+            raise ValueError(f"Invalid domain '{domain}' for service '{service}'. Available domains: {domain_mapping[service]}")
     else:
-        domain = random.choice(['gmail.com', 'yahoo.com', 'hotmail.com', 'aol.com'])
-    return f"{random.choice(string.ascii_lowercase)}{random.randint(1, 999)}@{domain}"
+        # Randomly select a domain if none is specified
+        selected_domain = random.choice(domain_mapping[service].split(', ')) if service in domain_mapping else random.choice(['gmail.com', 'yahoo.com', 'hotmail.com', 'aol.com'])
+
+    # Generate the local part of the email
+    local_part_length = random.randint(6, 12)
+    local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=local_part_length))
+    return f"{local_part}@{selected_domain}"
 
 def generate_random_password():
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    """Generate a random password with a length between 6 and 50 characters."""
+    length = random.randint(6, 50)
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-# Slash command to generate an account
-@bot.tree.command(name="generate_account", description="Generate an account for a specific service and domain.")
-@app_commands.describe(service="The service to generate an account for.", domain="The domain to use.")
-async def generate_account(interaction: discord.Interaction, service: str, domain: str):
+# Integrate all accounts from service_stock into valid_accounts
+valid_accounts = {
+    service: [{'email': generate_random_email(service), 'password': generate_random_password()} for _ in range(12)]
+    for service in service_stock.keys()
+}
+
+# Slash command to generate accounts
+@bot.tree.command(name="generate_account", description="Generate accounts for a specific service and domain.")
+@app_commands.describe(service="The service to generate accounts for.", domain="The domain to use.", amount="The number of accounts to generate.")
+async def generate_account(interaction: discord.Interaction, service: str, domain: str, amount: int = 1):
     user_limit = get_user_limit(interaction.user)
     if user_limit == 0:
         await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
@@ -166,9 +181,36 @@ async def generate_account(interaction: discord.Interaction, service: str, domai
         await interaction.response.send_message(f"Invalid domain for {service}. Available domains: {domain_mapping[service]}", ephemeral=True)
         return
 
-    email = generate_random_email(service, domain)
-    password = generate_random_password()
-    await interaction.response.send_message(f"Generated account:\nEmail: `{email}`\nPassword: `{password}`")
+    if amount > user_limit:
+        await interaction.response.send_message(
+            f"You can only generate up to {user_limit} accounts based on your role.",
+            ephemeral=True
+        )
+        return
+
+    # Generate the requested number of accounts
+    accounts = [
+        {
+            "email": generate_random_email(service, domain),
+            "password": generate_random_password()
+        }
+        for _ in range(amount)
+    ]
+
+    # Format the response
+    account_details = "\n".join(
+        f"**Account {i+1}:**\n"
+        f"**Email:** `{account['email']}`\n"
+        f"**Password:** `{account['password']}`"
+        for i, account in enumerate(accounts)
+    )
+
+    # Send the response
+    if len(account_details) > 2000:  # Discord message limit is 2000 characters
+        await interaction.response.send_message("The generated accounts are too many to display in one message. Please try generating fewer accounts.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"Generated {amount} account(s):\n\n{account_details}")
+    # Remove this duplicate function definition as it already exists earlier in the code.
 
 # Slash command to generate credit cards
 @bot.tree.command(name="generate_credit_card", description="Generate random credit cards.")
@@ -376,5 +418,3 @@ async def on_ready():
 
 # Run the bot
 bot.run('YOUR_BOT_TOKEN')
-
-# Replace YOUR_BOT_TOKEN with your bot token
